@@ -27,14 +27,18 @@ class ShellManager:
 
     def build_command_from_dict(self, command):
         sanitised = []
-        for key, value in command.items():
-            item = shlex.quote(key)
-            if isinstance(value, str) and len(value) > 0:
-                item = item + ' ' + shlex.quote(value)
-            else:
-                item = item + ' ' + str(value)
+        if type(command) == list:
+            for cmd in command:
+                sanitised.append(self.build_command_from_dict(cmd))
+        else:
+            for key, value in command.items():
+                item = shlex.quote(key)
+                if isinstance(value, str) and len(value) > 0:
+                    item = item + ' ' + shlex.quote(value)
+                else:
+                    item = item + ' ' + str(value)
 
-            sanitised.append(item.strip())
+                sanitised.append(item.strip())
 
         return sanitised
 
@@ -81,6 +85,6 @@ class ShellManager:
         if page == 0 and per_page == 0:
             logs = logs.all()
         else:
-            logs = logs.paginate(page, per_page, False)
+            logs = logs.paginate(page=page, per_page=per_page)
 
         return logs

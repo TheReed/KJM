@@ -63,12 +63,12 @@
     $(document).ready(function() {
         $('#termination-date').datetimepicker({
             format: 'Y-MM-DD',
-            date: '{{ session.terminate_at }}'
+            date:  moment().add(7,'days')
         });
 
         $('#termination-time').datetimepicker({
             format: 'HH:mm',
-            date: '{{ session.terminate_at }}'
+            date: moment()
         });
     });
 </script>

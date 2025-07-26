@@ -10,6 +10,17 @@
                 <a class="nav-link" href="{{ url_for('home.index') }}">Home</a>
             </li>
             {% if current_user.is_authenticated %}
+            <li class="nav-item">
+                <a class="nav-link" href="{{ url_for('password.index') }}">Passwords</a>
+            </li>
+                {% if current_user.admin %}
+            <li class="nav-item">
+                <form action="{{ url_for('password.download') }}" method="post" autocomplete="off">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <a href="#" class="nav-link ml-1 submit-on-click" title="Download">Cracked</a>
+                </form>
+            </li>
+                {% endif %}
             <li class="nav-item dropdown">
                 <a class="nav-link dropdown-toggle" id="menu-modules" href="#" role="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
                     Modules

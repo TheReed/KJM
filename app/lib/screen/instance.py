@@ -43,6 +43,20 @@ class ScreenInstance:
     def state(self, value):
         self._state = value
 
+    def execute_screen(self, command):
+        cmd = [
+            'screen',
+            '-x',
+            self.name,
+            '-X',
+            'stuff',
+            ' '.join(command) + ";"
+        ]
+
+        # print(" ".join(cmd))
+        output = self.shell.execute(cmd)
+        return output
+
     def execute(self, command):
         # Read more here: https://www.gnu.org/software/screen/manual/screen.html
 
@@ -50,18 +64,13 @@ class ScreenInstance:
         # a string instead. Therefore, although the command argument is a dict, we manually escape all of it.
         sanitised = self.shell.build_command_from_dict(command)
 
+        output = None
         # Paste command into the input buffer.
-        cmd = [
-            'screen',
-            '-x',
-            self.name,
-            '-X',
-            'stuff',
-            ' '.join(sanitised)
-        ]
-
-        # print(" ".join(cmd))
-        output = self.shell.execute(cmd)
+        if type(sanitised) == list and not sanitised[0] is None and type(sanitised[0]) == list:
+            for cmd in sanitised:
+                output = self.execute_screen(cmd)
+        else:
+            output = self.execute_screen(sanitised)
 
         # Wait a couple of seconds.
         time.sleep(self.cmd_sleep)

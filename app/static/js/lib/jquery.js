@@ -1,5 +1,5 @@
 /*!
- * jQuery JavaScript Library v3.6.0
+ * jQuery JavaScript Library v3.6.0 (modified)
  * https://jquery.com/
  *
  * Includes Sizzle.js
@@ -5853,13 +5853,15 @@ jQuery.each( { focus: "focusin", blur: "focusout" }, function( type, delegateTyp
 			// Return non-false to allow normal event-path propagation
 			return true;
 		},
-
-		// Suppress native focus or blur as it's already being fired
-		// in leverageNative.
-		_default: function() {
-			return true;
-		},
-
+/**
+ *		Commented out so that the search box is selected by default
+ *
+ *		// Suppress native focus or blur as it's already being fired
+ *		// in leverageNative.
+ *		_default: function() {
+ *			return true;
+ *		},
+ */
 		delegateType: delegateType
 	};
 } );

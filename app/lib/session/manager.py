@@ -1,9 +1,11 @@
+import json
 import re
 import random
 import string
 import os
 import datetime
 import time
+import logging
 from app.lib.models.sessions import SessionModel, SessionNotificationModel
 from app.lib.models.hashcat import HashcatModel, HashcatHistoryModel
 from app.lib.session.filesystem import SessionFileSystem
@@ -13,9 +15,11 @@ from app import db
 from sqlalchemy import and_, desc
 from flask import send_file
 
+logger = logging.getLogger(__name__)
+
 
 class SessionManager:
-    def __init__(self, hashcat, screens, wordlists, filesystem, webpush, shell, device_profile_manager):
+    def __init__(self, hashcat, screens, wordlists, filesystem, webpush, shell, device_profile_manager, rules):
         self.hashcat = hashcat
         self.screens = screens
         self.wordlists = wordlists
@@ -25,6 +29,7 @@ class SessionManager:
         self.session_filesystem = SessionFileSystem(filesystem)
         self.cmd_sleep = 2
         self.device_profile_manager = device_profile_manager
+        self.rules = rules
 
     def sanitise_name(self, name):
         return re.sub(r'\W+', '', name)
@@ -123,7 +128,7 @@ class SessionManager:
 
         data = []
         for session in sessions:
-            hashcat_instance = HashcatInstance(session, self.session_filesystem, self.hashcat, self.wordlists, self.device_profile_manager)
+            hashcat_instance = HashcatInstance(session, self.session_filesystem, self.hashcat, self.wordlists, self.device_profile_manager, self.rules)
             instance = SessionInstance(session, hashcat_instance, self.session_filesystem)
             data.append(instance)
 
@@ -142,6 +147,8 @@ class SessionManager:
         current.wordlist = history.wordlist
         current.rule_type = history.rule_type
         current.rule = history.rule
+        current.adv_rules = history.adv_rules
+        current.concurrent_rules = history.concurrent_rules
         current.mask_type = history.mask_type
         current.masklist = history.masklist
         current.mask = history.mask
@@ -170,6 +177,10 @@ class SessionManager:
             record.rule_type = value
         elif name == 'rule':
             record.rule = value
+        elif name == 'adv_rules':
+            record.adv_rules = json.dumps(value) if value is not None and not value == '' else None
+        elif name == 'concurrent_rules':
+            record.concurrent_rules = value
         elif name == 'mask_type':
             record.mask_type = value
         elif name == 'masklist':
@@ -243,7 +254,8 @@ class SessionManager:
                 session.hashcat.hashtype,
                 self.session_filesystem.get_hashfile_path(session.user_id, session_id),
                 session.hashcat.wordlist_path,
-                session.hashcat.rule_path,
+                session.hashcat.adv_rules_path if 2 == session.hashcat.rule_type else session.hashcat.rule_path,
+                session.hashcat.concurrent_rules,
                 self.session_filesystem.get_crackedfile_path(session.user_id, session_id),
                 self.session_filesystem.get_potfile_path(session.user_id, session_id),
                 int(session.hashcat.increment_min),
@@ -299,14 +311,16 @@ class SessionManager:
             # Wain a second.
             time.sleep(1)
         elif action == 'stop':
-            # Send an "s" command to show current status.
-            screen.execute({'s': ''})
+            count = len(session.hashcat.adv_rules_path) if 2 == session.hashcat.rule_type else 1
+            for i in range(count):
+                # Send an "s" command to show current status.
+                screen.execute({'s': ''})
 
-            # Wain a second.
-            time.sleep(1)
+                # Wain a second.
+                time.sleep(1)
 
-            # Hashcat only needs 'q' to pause.
-            screen.execute({'q': ''})
+                # Hashcat only needs 'q' to pause.
+                screen.execute({'q': ''})
         elif action == 'restore':
             if self.__is_past_date(session.terminate_at):
                 return False
@@ -338,6 +352,8 @@ class SessionManager:
             wordlist_type=record.wordlist_type,
             rule_type=record.rule_type,
             rule=record.rule,
+            adv_rules=record.adv_rules,
+            concurrent_rules=record.concurrent_rules,
             mask_type=record.mask_type,
             masklist=record.masklist,
             mask=record.mask,
@@ -381,6 +397,21 @@ class SessionManager:
             file = self.session_filesystem.get_custom_file_path(session.user_id, session_id, prefix='pwd_wordlist')
             self.export_cracked_passwords(session_id, file)
             save_as = save_as + '.plain.txt'
+        elif which_file == 'dehex':
+            file = self.session_filesystem.get_custom_file_path(session.user_id, session_id, prefix='dehex_pwd_wordlist')
+            file2 = file+'.tmp'
+            # Work around for hashcat --outfile appeneding information instead of replacing it
+            if os.path.exists(file2):
+                os.remove(file2)
+            self.export_cracked_passwords(session_id, file2)
+            with open(file,'w') as out_file:
+                with open(file2,'r') as in_file:
+                    for line in in_file:
+                        try:
+                            username, password = line.split(":", 1)
+                            out_file.write(username + ":" + str(self.__decode_hex(password)))
+                        except:
+                            out_file.write(str(self.__decode_hex(line)))
         else:
             # It means it's a raw/screen log file.
             files = self.get_data_files(session.user_id, session_id)
@@ -392,7 +423,29 @@ class SessionManager:
         if not os.path.exists(file):
             return 'Error'
 
-        return send_file(file, attachment_filename=save_as, as_attachment=True)
+        return send_file(file, download_name=save_as, as_attachment=True)
+
+    def __decode_hex(self, password):
+        decoded = []
+        pwd = password
+        if "$HEX" in password:
+            multihex = list(filter(None, password.split("$")))
+            for x in multihex:
+                if "HEX[" in x:
+                    endhex = x.find("]")
+                    try:
+                        decoded.append((bytes.fromhex(x[4:endhex]).decode("utf-8")))
+                    except:
+                        decoded.append((bytes.fromhex(x[4:endhex]).decode("cp1252")))
+                    decoded.append(x[endhex+1:])
+                else:
+                    decoded.append(x)
+
+            if len(decoded) != 0:
+                pwd = ''.join(decoded)
+            return (pwd)
+        else:
+            return (pwd)
 
     def get_cracked_passwords(self, session_id):
         session = self.get(session_id=session_id)[0]
@@ -405,17 +458,24 @@ class SessionManager:
         return self.session_filesystem.read_file(file)
 
     def get_running_processes(self):
+        logger.debug('Getting running processes...')
         sessions = self.get()
 
         data = {
             'stats': {
                 'all': 0,
                 'web': 0,
+                # seart addition for GPU Status Display
+                'gpu': self.get_gpu_stats(),
+                # end seart addition for GPU Status Display
                 'ssh': 0
             },
             'commands': {
                 'all': [],
                 'web': [],
+                # seart addition for GPU Status Display
+                'gpu': [],
+                # end seart addition for GPU Status Display
                 'ssh': []
             }
         }
@@ -436,8 +496,16 @@ class SessionManager:
             key = 'web' if found else 'ssh'
             data['stats'][key] = data['stats'][key] + 1
             data['commands'][key].append(process)
-
+        logger.debug("Data structure for processes: {}".format(data))
         return data
+
+    # """ seart addition for GPU status display """
+    def get_gpu_stats(self):
+        output = "broken"
+    #    output = self.shell.execute("gpus")
+        # output = self.shell.execute(gpustat | grep -v \: | awk '{ printf("%4s%4s%6s/%5sMB\n",$5, $6, $9, $11)}')
+        return output
+    # """ end seart addition for GPU status display """
 
     def set_termination_datetime(self, session_id, date, time):
         date_string = date + ' ' + time
@@ -460,26 +528,32 @@ class SessionManager:
         return True
 
     def __is_past_date(self, date):
+        logger.debug('Checking if date is past date...')
         return datetime.datetime.now() > date
 
     def terminate_past_sessions(self):
         # Get all sessions which have terminate_at set as a past datetime.
         print("Trying to get past sessions...")
+        logger.debug("Trying to get past sessions...")
         past_sessions = SessionModel.query.filter(SessionModel.terminate_at < datetime.datetime.now()).all()
         for past_session in past_sessions:
             # Check if session is currently running.
             print("Loading session %d" % past_session.id)
+            logger.debug("Loading session %d" % past_session.id)
             session = self.get(past_session.user_id, past_session.id)
             if len(session) == 0:
                 print("Session %d does not exist" % past_session.id)
+                logger.debug("Session %d does not exist" % past_session.id)
                 continue
             print("Session %d loaded" % past_session.id)
+            logger.debug("Session %d loaded" % past_session.id)
             session = session[0]
 
             status = session.hashcat.state
             if status == 1 or status == 4:
                 # If it's running or paused, terminate.
                 print("Terminating session %d" % past_session.id)
+                logger.debug("Terminating session %d" % past_session.id)
                 self.hashcat_action(session.id, 'stop')
 
     def guess_hashtype(self, user_id, session_id, contains_username):
@@ -490,13 +564,20 @@ class SessionManager:
         # Get the first hash from the file
         try:
             with open(hashfile, 'r') as f:
-                hash = f.readline().strip()
-
-            if contains_username:
-                hash = hash.split(':', 1)[1]
+                while True:
+                    try:
+                        hash = f.readline().strip()
+                        if len(hash) == 0 or hash.startswith('#'):
+                            continue
+                        if contains_username:
+                            hash = hash.split(':', 1)[1]
+                    except IndexError:
+                        continue
+                    break
         except UnicodeDecodeError:
             hash = ''
 
+        hash = hash.replace(':', '')
         return self.hashcat.guess_hash(hash)
 
     def get_data_files(self, user_id, session_id):

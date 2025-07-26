@@ -38,8 +38,18 @@
                         </td>
                     </tr>
                     <tr>
-                        <th scope="row">Rule</th>
-                        <td><abbr title="{{ session.hashcat.rule_path }}">{{ session.hashcat.rule if session.hashcat.mode == 0 else '' }}</abbr></td>
+                        <th scope="row">Rule(s)</th>
+                        <td>
+                            {% if session.hashcat.rule_type == 0 or session.hashcat.rule_type == '' %}
+                                <abbr title="{{ session.hashcat.rule_path }}">{{ session.hashcat.rule }}</abbr>
+                            {% elif session.hashcat.rule_type == 1 %}
+                                <abbr title="{{ session.hashcat.rule_path }}">Custom Session Rule</abbr>
+                            {% elif session.hashcat.rule_type == 2 %}
+                            {% for rule_name in session.hashcat.adv_rules %}
+                                <abbr title="{{ session.hashcat.rule_path }}">{{ rule_name }}</abbr><br/>
+                            {% endfor %}
+                            {% endif %}
+                        </td>
                     </tr>
                     {% else %}
                     <tr>
@@ -103,6 +113,10 @@
                                 <form action="{{ url_for('sessions.download_file', session_id=session.id, which_file='plain') }}" method="post" class="force-inline" autocomplete="off">
                                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                     <a href="#" class="text-success ml-1 submit-on-click" title="Download cracked plain passwords"><i class="fas fa-file-download fa-lg"></i></a>
+                                </form>
+                                <form action="{{ url_for('sessions.download_file', session_id=session.id, which_file='dehex') }}" method="post" class="force-inline" autocomplete="off">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <a href="#" class="text-danger ml-1 submit-on-click" title="Download decoded passwords"><i class="fas fa-file-download fa-lg"></i></a>
                                 </form>
                                 {% endif %}
                             {% endif %}

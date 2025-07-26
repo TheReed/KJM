@@ -1,7 +1,5 @@
 {% extends 'layout/base.html' %}
-
 {% block content %}
-
 {% if session.hashcat.state == 1 %}
 <div class="row mt-5">
     <div class="col">
@@ -9,7 +7,6 @@
     </div>
 </div>
 {% endif %}
-
 {% set active_nav = 'wordlist' %}
 {% include 'sessions/includes/header.html' %}
 
@@ -33,19 +30,13 @@
                         <select name="wordlist" id="wordlist" class="form-control">
                             <option value=""></option>
                             <optgroup label="Directories">
-                                {% for name, wordlist in wordlists.items() %}
-                                {% if wordlist['type'] == 'folder' %}
-                                <option value="{{ name }}">{{ name }}</option>
-                                {% endif %}
-                                {% endfor %}
+                                {% for name, wordlist in wordlists.items() %}{% if wordlist['type'] == 'folder' %}<option value="{{ name }}">{{ name }}</option>
+                                {% endif %}{% endfor %}
                             </optgroup>
 
                             <optgroup label="Files">
-                                {% for name, wordlist in wordlists.items() %}
-                                {% if wordlist['type'] == 'file' %}
-                                <option value="{{ name }}">{{ name }} - {{ wordlist['size_human'] }}</option>
-                                {% endif %}
-                                {% endfor %}
+                                {% for name, wordlist in wordlists.items() %}{% if wordlist['type'] == 'file' %}<option value="{{ name }}">{{ name }} - {{ wordlist['size_human'] }}</option>
+                                {% endif %}{% endfor %}
                             </optgroup>
                         </select>
                     </div>
@@ -76,21 +67,20 @@
                 <div class="card-body">
                     <div class="form-group">
                         <div class="custom-control custom-radio">
-                            <input type="radio" id="rule-global" name="rule_type" class="mode-option custom-control-input" value="0" {{ 'checked' if session.hashcat.rule_type == 0 or session.hashcat.rule_type == None or session.hashcat.rule_type == '' else '' }}>
+                            <input type="radio" id="rule-global" onchange="$('#adv_rules').select2({}).val('').trigger('change')" name="rule_type" class="mode-option custom-control-input" value="0" {{ 'checked' if session.hashcat.rule_type == 0 or session.hashcat.rule_type == None or session.hashcat.rule_type == '' else '' }}>
                             <label class="custom-control-label" for="rule-global">Global Rules</label>
                         </div>
 
                         <select name="rule" id="rule" class="form-control">
                             <option value="">No Rules</option>
-                            {% for key, rule in rules.items() %}
-                            <option value="{{ key }}">{{ rule.name }}</option>
+                            {% for key, rule in rules.items() %}<option value="{{ key }}">{{ rule.name }} - {{ rule['size_human'] }}</option>
                             {% endfor %}
                         </select>
                     </div>
 
                     <div class="form-group">
                         <div class="custom-control custom-radio">
-                            <input type="radio" id="rule-session" name="rule_type" class="mode-option custom-control-input" value="1" {{ 'checked' if session.hashcat.rule_type == 1 else '' }}>
+                            <input type="radio" id="rule-session" onchange="$('#adv_rules').select2({}).val('').trigger('change')" name="rule_type" class="mode-option custom-control-input" value="1" {{ 'checked' if session.hashcat.rule_type == 1 else '' }}>
                             <label class="custom-control-label" for="rule-session">Custom Session Rule{% if has_custom_rule == True %} <small>(already uploaded)</small>{% endif %}</label>
                         </div>
 
@@ -98,6 +88,27 @@
                             <input type="file" class="custom-file-input" id="custom_rule" name="custom_rule">
                             <label class="custom-file-label" for="custom_rule">Choose your rule</label>
                         </div>
+                    </div>
+
+                    <div class="form-group">
+                        <div class="custom-control custom-radio">
+                            <input type="radio" id="rule_adv" name="rule_type" class="mode-option custom-control-input" value="2" {{ 'checked' if session.hashcat.rule_type == 2 else '' }}>
+                            <label class="custom-control-label" for="rule_adv">Advanced Rule Selection</label>
+                        </div>
+
+                        <select name="adv_rules" id="adv_rules" onclick="$('#rule_adv').prop('checked',true)" multiple class="form-control">
+                            {% for key, rule in rules.items()|sort(attribute='1.size') %}<option value="{{ key }}">{{ rule.name }} - {{ rule['size_human'] }}</option>
+                            {% endfor %}
+                        </select>
+
+                        <!--div class="form-group">
+                            <label for="concurrent_rules">Execute rules concurrently</label>
+                            <div class="custom-control custom-switch float-right">
+                                <input name="concurrent_rules" type="checkbox" class="custom-control-input" id="concurrent_rules" value="1" {{ "checked='checked'" if session.hashcat.concurrent_rules == 1 else '' }}>
+                                <label class="custom-control-label" for="concurrent_rules"></label>
+                            </div>
+                        </div-->
+
                     </div>
                 </div>
             </div>
@@ -109,12 +120,16 @@
     </div>
 </div>
 
-<script type="text/javascript" src="{{ url_for('static', filename='js/crackerjack/sessions/wordlist.js') }}"></script>
+<!-- Was a 404 error message so jt commented it out 5/12/23 -->
+<!--script type="text/javascript" src="{{ url_for('static', filename='js/crackerjack/sessions/wordlist.js') }}"></script-->
 
 <script type="text/javascript">
     $(document).ready(function() {
         $('#rule').select2({}).val('{{ session.hashcat.rule }}').trigger('change');
         $('#wordlist').select2({}).val('{{ session.hashcat.wordlist }}').trigger('change');
+        {% if session.hashcat.rule_type == 2 %}
+        $('#adv_rules').select2({}).val({{ session.hashcat.adv_rules|tojson|safe }}).trigger('change');
+        {% endif %}
     });
 </script>
 

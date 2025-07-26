@@ -45,7 +45,7 @@ def user_save(user_id):
 
     if not users.save(user_id, username, password, full_name, email, admin, ldap, active):
         flash(users.get_last_error(), 'error')
-        return redirect(url_for('admin.user_edit', user_id=user_id))
+        return redirect(url_for('config.user_edit', user_id=user_id))
 
     flash('User saved', 'success')
     return redirect(url_for('config.users'))

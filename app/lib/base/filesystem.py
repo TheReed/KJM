@@ -9,7 +9,8 @@ class FileSystemManager:
             return {}
 
         data = {}
-        for file in sorted(glob.glob(os.path.join(absolute_path, '**'), recursive=recursive)):
+        # Lambda substitution to only return file names not absolute path to files
+        for file in sorted(glob.glob(os.path.join(absolute_path, '**'), recursive=recursive), key=lambda x: x.replace(absolute_path, '').lstrip(os.sep).lower()):
             if not os.path.isfile(file):
                 continue
 
@@ -44,7 +45,7 @@ class FileSystemManager:
 
         return data
 
-    def human_filesize(self, num, suffix = 'B'):
+    def human_filesize(self, num, suffix='B'):
         for unit in ['', 'Ki', 'Mi', 'Gi', 'Ti', 'Pi', 'Ei', 'Zi']:
             if abs(num) < 1024.0:
                 return "%3.1f%s%s" % (num, unit, suffix)

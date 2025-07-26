@@ -1,8 +1,12 @@
 import collections
 import re
+from datetime import datetime, timedelta
 
 
 class HashcatManager:
+    device_ouptput = None
+    device_query_time = None
+
     def __init__(self, shell, hashcat_binary, hashid, status_interval=10, force=False, autoid=False):
         self.shell = shell
         self.hashcat_binary = hashcat_binary
@@ -10,10 +14,12 @@ class HashcatManager:
         self.status_interval = 10 if int(status_interval) <= 0 else int(status_interval)
         self.force = force
         self.autoid = autoid
+        self.__device_output = None
+        self.__device_query_time = None
 
     def get_supported_hashes(self):
-        output = self.shell.execute([self.hashcat_binary, '--help'], user_id=0, log_to_db=False)
-
+        output = self.shell.execute([self.hashcat_binary, '-hh'], user_id=0, log_to_db=False)
+        print("Hashcat output for Supported Hashes: {}".format(output))
         # Split lines using \n and run strip against all elements of the list.
         lines = list(map(str.strip, output.split("\n")))
         hashes = self.__parse_supported_hashes(lines)
@@ -51,15 +57,9 @@ class HashcatManager:
         if len(output) == 0:
             return []
 
-        output = output.split("\r")
         hashes = []
-        for item in output:
-            item = item.split("\n")
-            for guess in item:
-                if not guess.isnumeric():
-                    continue
-                hashes.append(guess)
-
+        p = re.compile(r'\d+')
+        hashes = p.findall(output)
         return hashes
 
     def __parse_supported_hashes(self, lines):
@@ -68,7 +68,7 @@ class HashcatManager:
         alphanum_hashes = {}
         parent_code = ''
         for line in lines:
-            if line == '- [ Hash modes ] -':
+            if line == '- [ Hash Modes ] -' or line == '- [ Hash modes ] -':
                 found = True
             elif found and line == '' and len(hashes) > 0:
                 break
@@ -200,7 +200,7 @@ class HashcatManager:
             '--outfile',
             save_as,
             '--outfile-format',
-            '2',
+            '1,2',
             '--show',
             hashfile,
             '--hash-type',
@@ -210,7 +210,7 @@ class HashcatManager:
 
         return command
 
-    def build_command_line(self, session_name, mode, mask_type, masklist_path, mask, hashtype, hashfile, wordlist, rule, outputfile, potfile,
+    def build_command_line(self, session_name, mode, mask_type, masklist_path, mask, hashtype, hashfile, wordlist, rule, concurrentRules, outputfile, potfile,
                            increment_min, increment_max, optimised_kernel, workload, contains_usernames, backend_devices):
         command = {
             self.hashcat_binary: '',
@@ -225,12 +225,39 @@ class HashcatManager:
             hashfile: '',
         }
 
+        if backend_devices is not None:
+            command['--backend-devices'] = str(backend_devices)
+
+        if optimised_kernel == 1:
+            command['--optimized-kernel-enable'] = ''
+
+        if contains_usernames == 1:
+            command['--username'] = ''
+
+        if self.force:
+            command['--force'] = ''
+
         if mode == 0:
             # Wordlist.
             command[wordlist] = ''
 
             if len(rule) > 0:
-                command['--rules-file'] = rule
+                if concurrentRules:
+                    for rf in rule:
+                        # This will not work with the currently configured dictionaries due to them having no duplication
+                        # limitiation on the keys
+                        command['--rules-file'] = rf
+                else:
+                    commandLoop = []
+                    if type(rule) == list:
+                        for rf in rule:
+                            cmd = command.copy()
+                            cmd['--rules-file'] = rf
+                            commandLoop.append(cmd)
+                        command = commandLoop
+                    else:
+                        command['--rules-file'] = rule
+
         elif mode == 3:
             # Bruteforce.
             if mask_type == 2:
@@ -256,17 +283,6 @@ class HashcatManager:
             # Invalid or not implemented yet.
             return {}
 
-        if backend_devices is not None:
-            command['--backend-devices'] = str(backend_devices)
-
-        if optimised_kernel == 1:
-            command['--optimized-kernel-enable'] = ''
-
-        if contains_usernames == 1:
-            command['--username'] = ''
-
-        if self.force:
-            command['--force'] = ''
 
         return command
 
@@ -492,13 +508,13 @@ class HashcatManager:
 
         # progress
         if 'Progress' in raw:
-            matches = re.findall('\((\d+.\d+)', raw['Progress'])
+            matches = re.findall(r'\((\d+.\d+)', raw['Progress'])
             if len(matches) == 1:
                 data['progress'] = matches[0]
 
         # passwords
         if 'Recovered' in raw:
-            matches = re.findall('(\d+/\d+)', raw['Recovered'])
+            matches = re.findall(r'(\d+/\d+)', raw['Recovered'])
             if len(matches) > 0:
                 passwords = matches[0].split('/')
                 if len(passwords) == 2:
@@ -507,23 +523,33 @@ class HashcatManager:
 
         # time remaining
         if 'Time.Estimated' in raw:
-            matches = re.findall('\((.*)\)', raw['Time.Estimated'])
+            matches = re.findall(r'\((.*)\)', raw['Time.Estimated'])
             if len(matches) == 1:
                 data['time_remaining'] = 'Finished' if matches[0] == '0 secs' else matches[0].strip()
 
         # estimated completion time
         if 'Time.Estimated' in raw:
-            matches = re.findall('(.*)\(', raw['Time.Estimated'])
+            matches = re.findall(r'(.*)\(', raw['Time.Estimated'])
             if len(matches) == 1:
                 data['estimated_completion_time'] = matches[0].strip()
 
         return data
 
+
     def get_detected_devices(self):
         if len(self.hashcat_binary) == 0:
             return {}
-        output = self.shell.execute([self.hashcat_binary, '-I', '--force'], user_id=0, log_to_db=False)
-        output += "\n\n" + output
+        currentTime = datetime.now()
+        # if HashcatManager.device_query_time is not None:
+        #     print("{}\n{}\ncomparision: {}".format(currentTime,HashcatManager.device_query_time,(HashcatManager.device_query_time < currentTime)))
+        if HashcatManager.device_query_time is None or HashcatManager.device_query_time < currentTime:
+            HashcatManager.device_query_time = currentTime + timedelta(minutes=90)
+            output = self.shell.execute([self.hashcat_binary, '-I', '--force'], user_id=0, log_to_db=False)
+            output += "\n\n" + output
+            HashcatManager.device_output = output
+            #print("hashcat queried!: {}".format(currentTime))
+        else:
+            output = HashcatManager.device_output
 
         matches = re.findall(r'Backend Device ID #(\d{1,}).*?Name.*?\:\s+(.*?)\n', output,
                              flags=re.DOTALL | re.MULTILINE)

@@ -1,3 +1,4 @@
+import logging
 import os
 import datetime
 from flask import Flask, session, render_template, request
@@ -9,6 +10,8 @@ from flask_crontab import Crontab
 from app import version
 
 
+logger = logging.getLogger(__name__)
+
 db = SQLAlchemy()
 migrate = Migrate()
 login = LoginManager()
@@ -18,6 +21,7 @@ crontab = Crontab()
 
 
 def create_app(config_class=None):
+    logging.basicConfig(level=logging.DEBUG)
     # Make sure the instance path is within the ./data folder.
     data_instance_path = os.path.realpath(os.path.join(os.path.dirname(os.path.realpath(__file__)), '..', 'data', 'instance'))
 
@@ -35,6 +39,7 @@ def create_app(config_class=None):
     app.config['SESSION_COOKIE_HTTPONLY'] = True
     # The referrer is disabled further down in the response headers.
     app.config['WTF_CSRF_SSL_STRICT'] = False
+#    app.config['FLASK_RUN_PYTHON'] = 'venv/bin/python3'
 
     # And now we override any custom settings from config.cfg if it exists.
     app.config.from_pyfile('config.py', silent=True)
@@ -53,6 +58,9 @@ def create_app(config_class=None):
 
     from app.controllers.home import bp as home_bp
     app.register_blueprint(home_bp, url_prefix='/')
+
+    from app.controllers.password import bp as password_bp
+    app.register_blueprint(password_bp, url_prefix='/password')
 
     from app.controllers.auth import bp as auth_bp
     app.register_blueprint(auth_bp, url_prefix='/auth')
@@ -134,8 +142,11 @@ def create_app(config_class=None):
 
     @crontab.job(minute="*/5")
     def cron():
+        logger.debug('Starting Cronjob...')
         provider = Provider()
+        logger.debug('Starting Getting a copy of the Cron task...')
         cron = provider.cron()
+        logger.debug('Finished Getting a copy of the Cron task and then starting the run.')
         cron.run()
 
     return app

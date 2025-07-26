@@ -1,13 +1,15 @@
 import os
+import json
 from app.lib.models.hashcat import HashcatModel
 
 
 class HashcatInstance:
-    def __init__(self, session, filesystem, manager, wordlists, device_profiles):
+    def __init__(self, session, filesystem, manager, wordlists, device_profiles, rules):
         self.session = session
         self.filesystem = filesystem
         self.hashcat = manager
         self.wordlists = wordlists
+        self.rules = rules
         self.device_profiles = device_profiles
         self.settings = HashcatModel.query.filter(HashcatModel.session_id == session.id).first()
 
@@ -134,6 +136,18 @@ class HashcatInstance:
     @property
     def rule(self):
         return os.path.basename(self.settings.rule) if self.settings else ''
+
+    @property
+    def adv_rules(self):
+        return self.rules.get_names_from_path(json.loads(self.settings.adv_rules)) if self.settings else ''
+
+    @property
+    def adv_rules_path(self):
+        return self.rules.get_rule_path(json.loads(self.settings.adv_rules)) if self.settings else ''
+
+    @property
+    def concurrent_rules(self):
+        return self.settings.concurrent_rules if self.settings else 0
 
     @property
     def mask_type(self):

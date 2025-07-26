@@ -38,7 +38,8 @@ class Provider:
             self.filesystem(),
             self.webpush(),
             self.shell(),
-            self.device_profiles()
+            self.device_profiles(),
+            self.rules()
         )
         return session
 

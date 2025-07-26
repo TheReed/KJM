@@ -31,6 +31,16 @@ def create():
 
     return redirect(url_for('sessions.setup_hashes', session_id=session.id))
 
+#""" seart addition for GPU status display """
+@bp.route('/_get_gpu_update', methods=['GET'])
+@login_required
+def get_gpu_update():
+    provider = Provider()
+    sessions = provider.sessions()
+
+    output = sessions.get_gpu_stats()
+    return output
+#""" end seart addition """
 
 @bp.route('/<int:session_id>/setup/hashes', methods=['GET'])
 @login_required
@@ -640,6 +650,7 @@ def __setup_rules(session_id, request):
 
         rule_location = rules.get_rule_path(rule)
         sessions.set_hashcat_setting(session_id, 'rule', rule_location)
+        sessions.set_hashcat_setting(session_id, 'adv_rules', '')
     elif rule_type == 1:
         # Custom rule.
         save_as = sessions.session_filesystem.get_custom_file_path(current_user.id, session_id, prefix='custom_rule',
@@ -655,6 +666,20 @@ def __setup_rules(session_id, request):
             # Otherwise upload new file.
             file.save(save_as)
             sessions.set_hashcat_setting(session_id, 'rule', save_as)
+
+        sessions.set_hashcat_setting(session_id, 'adv_rules', '')
+    elif rule_type == 2:
+        # Advanced rules
+        adv_rules = request.form.getlist('adv_rules')
+        concurrent_rules = int(request.form.get('concurrent_rules', 0))
+
+        if len(adv_rules) > 0 and not rules.is_valid_rule(adv_rules):
+            flash('Invalid rule selected', 'error')
+            return redirect(url_for('sessions.setup_wordlist', session_id=session_id))
+
+        rule_locations = rules.get_rule_path(adv_rules)
+        sessions.set_hashcat_setting(session_id, 'adv_rules', rule_locations)
+        sessions.set_hashcat_setting(session_id, 'concurrent_rules', concurrent_rules)
     else:
         flash('Invalid rule option', 'error')
         return redirect(url_for('sessions.setup_wordlist', session_id=session_id))

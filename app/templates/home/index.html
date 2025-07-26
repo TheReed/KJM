@@ -1,6 +1,25 @@
 {% extends 'layout/base.html' %}
 
 {% block content %}
+
+<!-- seart addition -->
+    <script type = "text/javascript">
+        setInterval(get_gpu_update,3000);
+        $SCRIPT_ROOT = {{ request.script_root|tojson|safe }};
+        function get_gpu_update() {
+            $.ajax({
+                url: $SCRIPT_ROOT + "/sessions/_get_gpu_update",
+                type: 'GET',
+                data: {},
+                success: function (results) {
+                    $('#gpu_update').html(results);
+                }
+            });
+            return false;
+        }
+    </script>
+<!-- end seart addition -->
+
 <div class="row mt-5">
     <div class="col-2"></div>
     <div class="col">
@@ -19,8 +38,10 @@
             </div>
             <div class="col text-monospace text-center">
                 <div class="text-monospace p-2 border border-info">
-                    <div style="font-size: 300%;">{{ processes.stats.ssh }}</div>
-                    <div class="pt-2 pb-2 border-top">via ssh</div>
+                    <!-- seart addition for GPU Status Display -->
+                    <div id=gpu_update style="font-size: 100%;">XXXXX</div>
+                    <div class="pt-2 pb-2 border-top">via gpu</div>
+                    <!-- end seart modification for GPU Status Display -->
                 </div>
             </div>
         </div>
@@ -99,6 +120,10 @@
                                 <form action="{{ url_for('sessions.download_file', session_id=session.id, which_file='cracked') }}" method="post" class="force-inline" autocomplete="off">
                                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                     <a href="#" class="text-warning ml-1 submit-on-click" title="Download"><i class="fas fa-file-download fa-lg"></i></a>
+                                </form>
+                                <form action="{{ url_for('sessions.download_file', session_id=session.id, which_file='dehex') }}" method="post" class="force-inline" autocomplete="off">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <a href="#" class="text-danger ml-1 submit-on-click" title="Download decoded passwords"><i class="fas fa-file-download fa-lg"></i></a>
                                 </form>
                             </span>
                             {% endif %}
