@@ -1,21 +1,3 @@
-> [!CAUTION]
-> This repo is unmaintained, visit https://github.com/sadreck/crackerjack for the latest version.
-
-# CrackerJack
-
-Web Interface for Hashcat by [Context Information Security](https://www.contextis.com/en/)
-
-# Contents
-
-* [Introduction](#introduction)
-* [Architecture](#architecture)
-* [Features](#features)
-* [Limitations](#limitations)
-* [Installation](docs/installation.md)
-* [Troubleshooting](docs/troubleshooting.md)
-* [Screenshots](#screenshots)
-* [License](#license)
-
 ## Introduction
 
 CrackerJack is a Web GUI for [Hashcat](https://hashcat.net/hashcat/) developed in Python.
